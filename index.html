@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>伪视频效果 - 图片旋转与音乐</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            overflow: hidden;
+            background-color: #000;
+            font-family: Arial, sans-serif;
+            color: white;
+        }
+        
+        canvas {
+            display: block;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .controls {
+            position: fixed;
+            bottom: 20px;
+            left: 0;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px);
+            z-index: 100;
+        }
+        
+        .progress-container {
+            width: 90%;
+            max-width: 500px;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        
+        .progress-bar {
+            width: 0%;
+            height: 100%;
+            background: #ff5e7d;
+            border-radius: 3px;
+            transition: width 0.1s;
+        }
+        
+        .control-buttons {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        button {
+            background: #444;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        button:hover {
+            background: #666;
+            transform: scale(1.05);
+        }
+        
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .speed-btn {
+            background: #333;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            font-weight: bold;
+        }
+        
+        .speed-display {
+            min-width: 50px;
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        .status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 15px;
+            border-radius: 10px;
+            font-size: 14px;
+            z-index: 100;
+        }
+        
+        .title {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            font-size: 24px;
+            font-weight: bold;
+            z-index: 100;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+        
+        .warning-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .warning-content {
+            max-width: 600px;
+            background: #222;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 0 30px rgba(255, 0, 0, 0.5);
+        }
+        
+        .warning-title {
+            font-size: 28px;
+            color: #ff5e7d;
+            margin-bottom: 20px;
+        }
+        
+        .warning-text {
+            font-size: 18px;
+            line-height: 1.5;
+            margin-bottom: 30px;
+        }
+        
+        .warning-button {
+            background: #ff5e7d;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .warning-button:hover {
+            background: #ff3d6a;
+            transform: scale(1.05);
+        }
+        
+        .time-display {
+            font-size: 14px;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="warning-modal" id="warningModal">
+        <div class="warning-content">
+            <h2 class="warning-title">光敏性癫痫警告</h2>
+            <p class="warning-text">
+                此内容包含快速闪烁的图像和旋转效果，可能对光敏性癫痫患者或对闪光敏感的人造成不适或癫痫发作。<br><br>
+                如果您或您的家人有癫痫病史，请谨慎观看。如果您感到头晕、视力变化、眼部或肌肉抽搐，请立即停止观看并咨询医生。
+            </p>
+            <button class="warning-button" id="acceptWarning">我理解风险，继续观看</button>
+        </div>
+    </div>
+    
+    <div class="title">旋转图片伪视频效果</div>
+    <div class="status">加载中...</div>
+    
+    <div class="controls">
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+        <div class="time-display">
+            <span id="currentTime">0:00</span> / <span id="duration">0:00</span>
+        </div>
+        <div class="control-buttons">
+            <button id="playPauseBtn">播放</button>
+            <div class="speed-control">
+                <button class="speed-btn" id="slowDownBtn">-</button>
+                <div class="speed-display" id="speedDisplay">1.0x</div>
+                <button class="speed-btn" id="speedUpBtn">+</button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="canvas"></canvas>
+    <audio id="audio" loop>
+        <source src="https://lx-sycdn.kuwo.cn/040a0f54894870640dc22529eb5e3aec/692574d2/resource/n1/42/83/3457965032.mp3?bitrate$128&from=vip" type="audio/mpeg">
+        <source src="music.mp3" type="audio/mpeg">
+        您的浏览器不支持音频元素。
+    </audio>
+
+    <script>
+        // 获取DOM元素
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const audio = document.getElementById('audio');
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const speedUpBtn = document.getElementById('speedUpBtn');
+        const slowDownBtn = document.getElementById('slowDownBtn');
+        const speedDisplay = document.getElementById('speedDisplay');
+        const status = document.querySelector('.status');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const currentTimeDisplay = document.getElementById('currentTime');
+        const durationDisplay = document.getElementById('duration');
+        const warningModal = document.getElementById('warningModal');
+        const acceptWarningBtn = document.getElementById('acceptWarning');
+        
+        // 设置canvas尺寸为窗口大小
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        
+        // 初始化变量
+        let img = new Image();
+        let isPlaying = false;
+        let rotationSpeed = 0.5; // 旋转速度（弧度/帧）
+        let rotationAngle = 0;   // 当前旋转角度
+        let imageScale = 1.0;    // 图片缩放比例
+        let animationId = null;
+        let animationPaused = false;
+        
+        // 加载图片
+        img.onload = function() {
+            status.textContent = "图片加载完成";
+            // 修改这里的缩放逻辑
+            const maxDimension = Math.max(img.width, img.height);
+            const screenDimension = Math.min(canvas.width, canvas.height);
+            
+            // 方法1：固定缩放比例（推荐）
+            imageScale = 0.8; // 调整为0.8，使图片更小，避免重叠
+            
+            // 开始动画
+            if (!animationId) {
+                animate();
+            }
+        };
+        
+        img.onerror = function() {
+            status.textContent = "图片加载失败，使用默认图片";
+            // 创建一个默认图片
+            createDefaultImage();
+        };
+        
+        // 尝试加载图片
+        img.src = 'pic.png';
+        
+        // 创建默认图片的函数
+        function createDefaultImage() {
+            // 创建一个200x200的彩色渐变图片
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = 200;
+            tempCanvas.height = 200;
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            // 创建渐变
+            const gradient = tempCtx.createLinearGradient(0, 0, 200, 200);
+            gradient.addColorStop(0, '#ff5e7d');
+            gradient.addColorStop(0.5, '#ffcb6b');
+            gradient.addColorStop(1, '#5b86e5');
+            
+            // 绘制圆形
+            tempCtx.fillStyle = gradient;
+            tempCtx.beginPath();
+            tempCtx.arc(100, 100, 80, 0, Math.PI * 2);
+            tempCtx.fill();
+            
+            // 添加文字
+            tempCtx.fillStyle = 'white';
+            tempCtx.font = 'bold 20px Arial';
+            tempCtx.textAlign = 'center';
+            tempCtx.fillText('伪视频', 100, 110);
+            
+            // 将图片设置为默认图片
+            img.src = tempCanvas.toDataURL();
+        }
+        
+        // 动画函数
+        function animate() {
+            // 清除画布
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 计算图片尺寸
+            const imgWidth = img.width * imageScale;
+            const imgHeight = img.height * imageScale;
+            
+            // 计算需要多少行和列来覆盖整个屏幕
+            const cols = Math.ceil(canvas.width / imgWidth) + 2;
+            const rows = Math.ceil(canvas.height / imgHeight) + 2;
+            
+            // 计算偏移量，使图片居中
+            const offsetX = -imgWidth/2 + (canvas.width - (cols * imgWidth)) / 2;
+            const offsetY = -imgHeight/2 + (canvas.height - (rows * imgHeight)) / 2;
+            
+            // 绘制所有图片
+            for (let i = 0; i < cols; i++) {
+                for (let j = 0; j < rows; j++) {
+                    const x = offsetX + i * imgWidth;
+                    const y = offsetY + j * imgHeight;
+                    
+                    // 保存当前状态
+                    ctx.save();
+                    
+                    // 移动到图片中心
+                    ctx.translate(x + imgWidth/2, y + imgHeight/2);
+                    
+                    // 旋转图片
+                    ctx.rotate(rotationAngle + (i + j) * 0.1);
+                    
+                    // 创建圆形裁剪区域
+                    ctx.beginPath();
+                    ctx.arc(0, 0, imgWidth/2, 0, Math.PI * 2);
+                    ctx.closePath();
+                    ctx.clip();
+                    
+                    // 绘制图片
+                    ctx.drawImage(img, -imgWidth/2, -imgHeight/2, imgWidth, imgHeight);
+                    
+                    // 恢复状态
+                    ctx.restore();
+                }
+            }
+            
+            // 更新旋转角度
+            if (!animationPaused) {
+                rotationAngle += rotationSpeed * 0.01;
+            }
+            
+            // 继续动画
+            animationId = requestAnimationFrame(animate);
+        }
+        
+        // 播放/暂停按钮事件
+        playPauseBtn.addEventListener('click', function() {
+            if (isPlaying) {
+                audio.pause();
+                animationPaused = true;
+                playPauseBtn.textContent = '播放';
+                isPlaying = false;
+            } else {
+                audio.play().catch(e => {
+                    console.error("音频播放失败:", e);
+                    status.textContent = "点击页面任意位置开始播放音乐";
+                });
+                animationPaused = false;
+                playPauseBtn.textContent = '暂停';
+                isPlaying = true;
+            }
+        });
+        
+        // 点击页面任意位置开始播放音乐（解决浏览器自动播放限制）
+        document.body.addEventListener('click', function() {
+            if (!isPlaying) {
+                audio.play().catch(e => console.error("音频播放失败:", e));
+                animationPaused = false;
+                playPauseBtn.textContent = '暂停';
+                isPlaying = true;
+                status.textContent = "音乐播放中";
+            }
+        });
+        
+        // 倍速控制
+        const speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0];
+        let currentSpeedIndex = 2; // 默认1.0x
+        
+        function updateSpeed() {
+            audio.playbackRate = speeds[currentSpeedIndex];
+            speedDisplay.textContent = `${speeds[currentSpeedIndex].toFixed(2)}x`;
+        }
+        
+        speedUpBtn.addEventListener('click', function() {
+            if (currentSpeedIndex < speeds.length - 1) {
+                currentSpeedIndex++;
+                updateSpeed();
+            }
+        });
+        
+        slowDownBtn.addEventListener('click', function() {
+            if (currentSpeedIndex > 0) {
+                currentSpeedIndex--;
+                updateSpeed();
+            }
+        });
+        
+        // 进度条功能
+        function updateProgress() {
+            const percent = (audio.currentTime / audio.duration) * 100;
+            progressBar.style.width = `${percent}%`;
+            
+            // 更新时间显示
+            currentTimeDisplay.textContent = formatTime(audio.currentTime);
+            durationDisplay.textContent = formatTime(audio.duration);
+        }
+        
+        function formatTime(seconds) {
+            if (isNaN(seconds)) return "0:00";
+            const min = Math.floor(seconds / 60);
+            const sec = Math.floor(seconds % 60);
+            return `${min}:${sec < 10 ? '0' : ''}${sec}`;
+        }
+        
+        // 点击进度条跳转
+        progressContainer.addEventListener('click', function(e) {
+            const rect = progressContainer.getBoundingClientRect();
+            const percent = (e.clientX - rect.left) / rect.width;
+            audio.currentTime = percent * audio.duration;
+        });
+        
+        // 窗口大小改变时调整canvas尺寸
+        window.addEventListener('resize', function() {
+            resizeCanvas();
+        });
+        
+        // 音频加载完成事件
+        audio.addEventListener('loadeddata', function() {
+            status.textContent = "音频加载完成";
+            updateSpeed();
+            durationDisplay.textContent = formatTime(audio.duration);
+        });
+        
+        // 音频加载错误事件
+        audio.addEventListener('error', function() {
+            status.textContent = "音频加载失败";
+        });
+        
+        // 音频时间更新事件
+        audio.addEventListener('timeupdate', updateProgress);
+        
+        // 光敏性癫痫警告
+        acceptWarningBtn.addEventListener('click', function() {
+            warningModal.style.display = 'none';
+            // 尝试自动播放音乐（可能被浏览器阻止）
+            audio.play().then(() => {
+                isPlaying = true;
+                playPauseBtn.textContent = '暂停';
+                status.textContent = "音乐播放中";
+            }).catch(e => {
+                console.log("自动播放被阻止，需要用户交互");
+                status.textContent = "点击页面任意位置开始播放音乐";
+            });
+        });
+        
+        // 初始化
+        resizeCanvas();
+        updateSpeed();
+    </script>
+</body>
+</html>
